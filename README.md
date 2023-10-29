@@ -2,7 +2,7 @@
 
 # Factor Fitting, Rank Allocation, and Partitioning in Multilevel Low Rank Matrices
  
-This repository accompanies the [manuscript](https://stanford.edu/~boyd/papers/pdf/mlr_fitting.pdf).
+This repository accompanies the [manuscript](https://stanford.edu/~boyd/papers/mlr_fitting.html).
 
 A multilevel low rank (MLR) matrix is a row and column permutation of
 sum of matrices, each one a block diagonal refinement of the previous one, 
