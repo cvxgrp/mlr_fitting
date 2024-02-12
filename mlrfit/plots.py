@@ -32,7 +32,8 @@ def plot_ra_evolution_col(rhs0, figsize=(6,4), dpi=120, filename='', width=1, sh
         a = a[idx]
     cmap = ListedColormap(a)
     for i, rh in enumerate(rhs):
-        ax = axs[i]
+        if len(rhs) >= 2: ax = axs[i]
+        else: ax = axs
         # assert np.allclose(rh.sum(axis=1), rh[0].sum())
         num_levels = rh.shape[1]
         df = pd.DataFrame(OrderedDict({r'$l=%d$'%(num_levels-i):val for i, val in \
@@ -51,8 +52,8 @@ def plot_ra_evolution_col(rhs0, figsize=(6,4), dpi=120, filename='', width=1, sh
 
         ax.set_ylim([0, rh[0].sum()])
         ax.set_xlim([-0.5, rh.shape[0]-0.5])
-
-    handles, labels = axs[1].get_legend_handles_labels()
+    if len(rhs) >= 2: handles, labels = axs[1].get_legend_handles_labels()
+    else: handles, labels = axs.get_legend_handles_labels()
     fig.legend(reversed(handles), reversed(labels), loc='center left', bbox_to_anchor=(1, 0.5))
     plt.tight_layout()
     if filename:
@@ -341,6 +342,7 @@ def plot_block_coord_epochs(all_losses, title, dpi=120, sharey=False):
 
 
 def plot_hist_rad_kern_matrices(A, Dist, La, kern_func, kern_type, d, n, sigma):
+    plt.rcParams['text.usetex'] = True
     fig = plt.figure(figsize=(7, 12), dpi=120)
     axes = fig.subplots(nrows=La+2, ncols=2)
     l = 0

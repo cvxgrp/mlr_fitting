@@ -81,8 +81,9 @@ def main():
             losses, epochs, ranks_history = hat_A.rank_alloc(A, ranks0, hpart, method=method, eps=eps,\
                             max_iters=10**3, max_iters_ff=max_iters_ff, symm=False, warm_start=False)
             print(f"{method} tuned: {ranks_history[-1] = }")
-            for i in range(1, len(epochs)-1):
-                assert losses[-i-1] - losses[-i] >= -1e-6, print("loss is not decreasing with epochs")
+            for i in range(epochs.size - 1):
+                e1, e2 = epochs[i], epochs[i+1] - 1
+                assert losses[e2] <= losses[e1] - 1e-6, print("loss is not decreasing with epochs", e1, e2, losses[e1] - losses[e2])
             assert eps >= losses[-2] - losses[-1], print(eps, losses[-2] - losses[-1], losses[-5:])
             assert losses[0] > losses[-1]
             assert np.allclose(mf.rel_diff(hat_A.matrix(), den=A), losses[-1]), \

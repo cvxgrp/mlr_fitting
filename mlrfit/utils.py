@@ -341,11 +341,9 @@ def ra_delta_obj(delta_rp1:np.ndarray, delta_rm1:np.ndarray, num_levels:int, top
             deltas[k] = np.inf
         else:
             deltas[k] = delta_rm1[tj] - delta_rp1[ti]
-    
     idx = np.argsort(deltas)[:top_k]
     tis = idx // num_levels
     tjs = idx % num_levels
-    # print(deltas)
     return deltas[idx], tis, tjs
 
 

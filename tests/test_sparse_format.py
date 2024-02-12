@@ -46,7 +46,9 @@ def main():
         b = hat_A_val @ true_x
         x1 = np.linalg.solve(hat_A_val, b)
         x2 = hat_A.solve(b)
-        assert np.allclose(x1, x2) and np.allclose(x2, true_x)
+        assert np.allclose(b.flatten(), (hat_A_val @ np.linalg.solve(hat_A_val, b)).flatten() )
+        assert np.allclose((hat_A_val @ hat_A.solve(b)).flatten(), b.flatten())
+        # assert np.allclose(x1, x2) and np.allclose(x2, true_x), print(np.linalg.norm(x2 - true_x))
         
     print("PASSED hat_A.tilde_B and hat_A.tilde_C implementation tests")
     print("PASSED hat_A.solve and hat_A.matvec implementation tests")

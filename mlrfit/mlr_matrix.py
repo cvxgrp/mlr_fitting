@@ -391,11 +391,18 @@ class MLRMatrix:
             snapshot1 = tracemalloc.take_snapshot()
             if printing: print("RA: Before while loop")
             display_top(snapshot1, limit=20)
-
+        top_k = min(top_k, num_levels * (num_levels - 1))
         while itr < max_iters:
             improved_rank = False
             k = 0
             min_deltas, is_plus, js_minus = ra_delta_obj(delta_rp1, delta_rm1, num_levels, top_k)
+            infs = np.where(min_deltas == np.inf)[0]
+            if infs.size != 0:
+                min_deltas = min_deltas[:infs[0]]
+                assert np.inf not in min_deltas
+                is_plus = is_plus[:infs[0]]
+                js_minus = js_minus[:infs[0]]
+                top_k = min(top_k, min_deltas.size)
             while k < top_k and not improved_rank:
                 i_plus = is_plus[k]
                 j_minus = js_minus[k]
@@ -452,7 +459,7 @@ class MLRMatrix:
 
     def hpartition_topdown(self, A:np.ndarray, ranks:np.ndarray, ks:Optional[np.ndarray]=None, \
                             func_partition:Optional[Callable]=None, printing=True, \
-                            method='bcd', eps_ff=1e-2, symm=False,\
+                            method='bcd', eps_ff=1e-2, symm=False, balanced=True, \
                             PSD=False, max_iters_ff=1, grref_max_iters=5000):
         """
         Top-down hier. partitioning that uses factor fit
@@ -477,7 +484,7 @@ class MLRMatrix:
         else:
             assert len(ks) == len(ranks) - 1
         if func_partition is None:
-            func_partition = spectral_partition(symm=symm, refined=True, max_iters=grref_max_iters)
+            func_partition = spectral_partition(symm=symm, refined=True, balanced=balanced, max_iters=grref_max_iters)
 
         htree = [{'rows':[np.arange(m)], 'cols':[np.arange(n)]}]
         # store absolute permutation of rows/cols that makes block diagonal
@@ -527,8 +534,10 @@ class MLRMatrix:
                     cols += [np.linspace(c1, c2, min(r2-r1, c2-c1), endpoint=False, dtype=int)]
                 rows = np.concatenate(rows + [np.array([m])])
                 cols = np.concatenate(cols + [np.array([n])])
-                assert rows.size == min(m, n) + 1 and cols.size == min(m, n) + 1
-                assert len(set(rows)) == min(m, n) + 1 and len(set(cols)) == min(m, n) + 1
+                # print(f"{num_blocks=}, {rows.size=}, {cols.size=}")
+                assert not balanced or rows.size == min(m, n) + 1 and cols.size == min(m, n) + 1, \
+                    print(rows.size, min(m, n) + 1, cols.size, min(m, n) + 1, set(range(m)).difference(rows))
+                assert not balanced or len(set(rows)) == min(m, n) + 1 and len(set(cols)) == min(m, n) + 1
                 hpart['rows']['lk'] += [ rows ]
                 hpart['cols']['lk'] += [ cols ]
             else:
@@ -540,6 +549,7 @@ class MLRMatrix:
                 htree += [{'rows':[], 'cols':[]}]
                 new_perm_rows = np.zeros(m).astype(int)
                 new_perm_cols = np.zeros(n).astype(int)
+                count1 = 0; count2 = 0
                 # find permutations of each block using given partition function
                 for block in range(num_blocks):
                     r2 = r1 + htree[level]['rows'][block].size
@@ -556,7 +566,10 @@ class MLRMatrix:
                         new_perm_cols[c1:c2][sep_c_bl[si]:sep_c_bl[si+1]] = perm_cols[c1:c2][pi_cols_bl[sep_c_bl[si]:sep_c_bl[si+1]]]
                         htree[level+1]['rows'] += [new_perm_rows[r1:r2][sep_r_bl[si]:sep_r_bl[si+1]]]
                         htree[level+1]['cols'] += [new_perm_cols[c1:c2][sep_c_bl[si]:sep_c_bl[si+1]]]
+                    count1 += sep_r_bl[-1]
+                    count2 += sep_c_bl[-1]
                     r1, c1 = r2, c2
+                assert count1 == m and count2 == n, print(f"{m=}, {count1=}, {n=}, {count2=}")
                 perm_rows = new_perm_rows
                 perm_cols = new_perm_cols
                 # permute the htree, B and C to respect the perm_rows/cols on the leaf level

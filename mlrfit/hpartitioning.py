@@ -291,7 +291,7 @@ def greedy_heur_refinement(R:np.ndarray, pi_rows:np.ndarray, sep_r:List[int], pi
     Greedy heristic refinement of rows and columns partitinoning of 
     matrix R into 2 parts, to increase further the sum of values on diagonal blocks
     """
-    itr = 0 
+    itr = -1 
     m, n = R.shape
     obj_all = [obj_partition_sum_full(R, pi_rows, pi_cols, sep_r, sep_c)]
     pi_inv_rows, pi_inv_cols = inv_permutation(pi_rows, pi_cols)
@@ -303,9 +303,10 @@ def greedy_heur_refinement(R:np.ndarray, pi_rows:np.ndarray, sep_r:List[int], pi
     row_sums = np.stack([(R[:,cols_parts[0]]).sum(axis=1), (R[:,cols_parts[1]]).sum(axis=1)], axis=0)
     col_sums = np.stack([(R[rows_parts[0],:]).sum(axis=0), (R[rows_parts[1],:]).sum(axis=0)], axis=0)
     while itr < max_iters:
+        itr += 1
         ## preprocessing: compute half row/cols sums
         # half row/col sums of first and second parition
-        if itr > 0:
+        if itr > 0 and best_tuple[0] != best_tuple[1]:
             if symm:
                 (i1, i2) = best_tuple
                 update_rowcol_sum_swap(R, row_sums, i1, i2)
@@ -326,10 +327,18 @@ def greedy_heur_refinement(R:np.ndarray, pi_rows:np.ndarray, sep_r:List[int], pi
         else:
             # Alternate between row and column swap
             if itr % 2 == 0: # swap rows
+                if sep_r[0]+1 == sep_r[2]: 
+                    # single element in a partition
+                    best_tuple = (sep_r[0], sep_r[0])
+                    continue 
                 min_delta_obj, i1, i2 = delta_obj_part_rowswap_sum(R, row_sums, pi_rows[sep_r[0]:sep_r[1]], \
                                                   pi_rows[sep_r[1]:sep_r[2]], sep_r[1], sep_r[2]-sep_r[1])
                 best_tuple = (i1, i2)
             else: # swap columns
+                if sep_c[0]+1 == sep_c[2]: 
+                    # single element in a partition
+                    best_tuple = (sep_c[0], sep_c[0])
+                    continue 
                 min_delta_obj, j1, j2 = delta_obj_part_colswap_sum(R, col_sums, pi_cols[sep_c[0]:sep_c[1]], \
                                                   pi_cols[sep_c[1]:sep_c[2]], sep_c[1], sep_c[2]-sep_c[1])
                 best_tuple = (j1, j2)
@@ -354,7 +363,6 @@ def greedy_heur_refinement(R:np.ndarray, pi_rows:np.ndarray, sep_r:List[int], pi
             assert (np.sort(pi_rows)==np.arange(m)).all() and (np.sort(pi_cols)==np.arange(n)).all()
             assert np.allclose(R.sum(), row_sums.sum()) and \
                    np.allclose(R.sum(), col_sums.sum())
-        itr += 1
         obj_all += [cur_obj]
     return pi_rows, pi_cols, obj_all
 
@@ -411,7 +419,7 @@ def bipartite_spectral_partition(symm=False, refined=True, max_iters=100, debug=
 
 # @tprofile
 # @mprofile
-def spectral_partition(symm=False, refined=False, max_iters=100, debug=False):
+def spectral_partition(symm=False, refined=False, max_iters=100, debug=False, balanced=True):
     def spectral_partition_helper(R:np.ndarray, k=2):
         """
         Spectral partitioning of rows and columns of matrix R
@@ -421,13 +429,15 @@ def spectral_partition(symm=False, refined=False, max_iters=100, debug=False):
             the objective is to **maximize** the sum of pairwise similarities within clusters
         """
         m, n = R.shape
+        if m == 1 or n == 1:
+            return np.arange(m, dtype=np.int), [0, m], np.arange(n, dtype=np.int), [0, n]
         if np.allclose(R.sum(), 0):
             # divide arbitrarily 
             u = np.arange(m)
             v = np.arange(n)
         elif symm:
             if R.size == 1:
-                return [0], [0,1], [0], [0,1]
+                return [0], [0, 1], [0], [0, 1]
             # Laplacian from |residual matrix|**2 for a "connected" R
             R = np.maximum(R, 0) + np.ones((n,n))*1e-5
             d = R.sum(axis=1)
@@ -475,8 +485,25 @@ def spectral_partition(symm=False, refined=False, max_iters=100, debug=False):
             del tilde_R
         rows = np.argsort(u)
         cols = np.argsort(v)
-        sep_r = [0, m//2, m]; sep_c = [0, n//2, n]
-        if refined:
+        if balanced: # balanced cluster partitioning
+            sep_r = np.linspace(0, m, num=k+1, endpoint=True).astype(int)
+            sep_c = np.linspace(0, n, num=k+1, endpoint=True).astype(int)
+        else: # unbalanced cluster partitioning on two clusters (k = 2)
+            pos_idx = np.where(u[rows] > 0)[0]
+            if pos_idx.size == 0:
+                sep_r = [0, m]
+            else:
+                sep_r = [0, pos_idx[0], m]
+            # assert np.allclose(np.sort(u), u[rows])
+            pos_idx = np.where(v[cols] > 0)[0]
+            if pos_idx.size == 0:
+                sep_c = [0, n]
+            else:
+                sep_c = [0, pos_idx[0], n]
+            # assert np.allclose(np.sort(v), v[cols])
+            # print(f"{sep_r=}, {u[rows]=}, {sep_c=}, {v[cols]=}")
+            assert len(sep_r) == len(sep_c), print(f"{sep_r=}, {sep_c=}, {pos_idx=}")
+        if refined and (sep_r[0]+1 < sep_r[2] or sep_c[0]+1 < sep_c[2]):
             rows, cols, _ = greedy_heur_refinement(R, rows, sep_r, cols, sep_c, symm=symm, \
                                                     max_iters=max_iters, debug=debug)
         return rows, sep_r, cols, sep_c
